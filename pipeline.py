@@ -1,4 +1,7 @@
-import tensorflow as tf
+# import tensorflow as tf
+import tflite_runtime.interpreter as tflite
+
+
 import numpy as np
 import cv2
 import mediapipe as mp
@@ -198,7 +201,8 @@ def main():
         exit(1)
 
     # TFLite embedder (MobileFaceNet)
-    interpreter = tf.lite.Interpreter(model_path=embed_model_path, num_threads=2)
+    # interpreter = tf.lite.Interpreter(model_path=embed_model_path, num_threads=2)
+    interpreter = tflite.Interpreter(model_path=embed_model_path, num_threads=2)
     interpreter.allocate_tensors()
     input_details = interpreter.get_input_details()
     output_details = interpreter.get_output_details()
