@@ -24,7 +24,7 @@ class Embeddings:
         # !! For laptop
         # self.interpreter = tf.lite.Interpreter(model_path=self.model_path, num_threads=2)
         # !! For resberry Pi
-        interpreter = tflite.Interpreter(model_path=self.model_path, num_threads=2)
+        self.interpreter = tflite.Interpreter(model_path=self.model_path, num_threads=2)
         self.interpreter.allocate_tensors()
         self.input_details = self.interpreter.get_input_details()
         self.output_details = self.interpreter.get_output_details()
