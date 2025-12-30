@@ -1,4 +1,3 @@
-# camera_ring_writer.py  (run with /usr/bin/python3)
 from picamera2 import Picamera2
 import time, os
 
@@ -6,6 +5,7 @@ OUT_DIR = "/home/miserasp/Desktop/projecte/shared/"
 os.makedirs(OUT_DIR, exist_ok=True)
 
 SLOTS = 10
+INTERVAL_SEC = 1
 WARMUP = 2.0
 
 picam2 = Picamera2()
@@ -17,19 +17,19 @@ slot = 1
 try:
     while True:
         final_path = os.path.join(OUT_DIR, f"slot_{slot:02d}.jpg")
-        tmp_path   = final_path + ".tmp"
+        tmp_path = final_path + ".part"   # still ends with .jpg -> OK
 
-        # Don’t overwrite unread image
+        # don't overwrite unread slot
         if os.path.exists(final_path):
             time.sleep(0.05)
             continue
 
-        picam2.capture_file(tmp_path)
-        os.replace(tmp_path, final_path)  # atomic publish
+        picam2.capture_file(tmp_path)      # works because extension includes .jpg
+        os.replace(tmp_path, final_path)   # atomic publish
         print("Wrote:", final_path)
 
         slot = (slot % SLOTS) + 1
-        time.sleep(1)  # 1 photo per second (adjust as needed)
+        time.sleep(INTERVAL_SEC)
 
 finally:
     picam2.stop()
