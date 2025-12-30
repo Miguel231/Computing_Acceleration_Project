@@ -17,15 +17,14 @@ slot = 1
 try:
     while True:
         final_path = os.path.join(OUT_DIR, f"slot_{slot:02d}.jpg")
-        tmp_path = final_path + ".part"   # still ends with .jpg -> OK
+        tmp_path   = os.path.join(OUT_DIR, f"slot_{slot:02d}.part.jpg")  # FIX
 
-        # don't overwrite unread slot
         if os.path.exists(final_path):
             time.sleep(0.05)
             continue
 
-        picam2.capture_file(tmp_path)      # works because extension includes .jpg
-        os.replace(tmp_path, final_path)   # atomic publish
+        picam2.capture_file(tmp_path)     # now PIL recognizes .jpg
+        os.replace(tmp_path, final_path)  # atomic publish
         print("Wrote:", final_path)
 
         slot = (slot % SLOTS) + 1
