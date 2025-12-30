@@ -13,7 +13,7 @@ while True:
         path = os.path.join(OUT_DIR, f"slot_{slot:02d}.jpg")
 
         if not os.path.exists(path):
-            continue  # <-- just skip missing and keep going
+            continue  
 
         img = cv2.imread(path)
         if img is None:

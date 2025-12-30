@@ -1,71 +1,86 @@
-
-from sys import argv, exit
 import cv2
 import numpy as np
+import os, time
 
 from face_detection import FaceDetector
 from embeddings import Embeddings
 from comunication import NtfyNotifier
+from utils import load_db
 
-
-def cosine_sim_from_l2(emb1, emb2):
-    return float(np.dot(emb1, emb2))
-
-
-def interpret_similarity(sim):
-    # Starting points; tune for your model/data.
-    if sim >= 0.55:
-        return "Very likely the same person"
-    elif sim >= 0.40:
-        return "Possibly the same person"
-    elif sim >= 0.30:
-        return "Unlikely the same person"
-    else:
-        return "Different people"
-    
 
 def main():
-    if len(argv) < 5:
-        print("Usage: python3 pipeline.py <face_detector.tflite> <embed_model.tflite> <img1> <img2>")
-        exit(0)
-    
-    detector_model_path = argv[1]
-    embed_model_path = argv[2]
-    img1_path = argv[3]
-    img2_path = argv[4]
+    OUT_DIR = "/home/miserasp/Desktop/projecte/shared/"
+    SLOTS = 10
+    THRESH = 0.7 # similarity threshold
+    EXPAND = 0.0
 
-    img1 = cv2.imread(img1_path)
-    img2 = cv2.imread(img2_path)
-    if img1 is None or img2 is None:
-        print("Failed to load images. Check paths.")
-        exit(1)
-    
-    # Detection
+    detector_model_path = "/data_projecte/detector.tflite"
+    embed_model_path = "/data_projecte/mobilefacenet_int8.tflite"
+    db_embs_path = "/data_projecte/storage.npz"
+
     detector = FaceDetector(detector_model_path)
-    # Embedding
     embedder = Embeddings(embed_model_path)
-    # Communication
     notifier = NtfyNotifier(topic="home-door-83f9a2")
 
-    cropped_face1 = detector.detect_and_crop_largest_face_tasks(img1, expand=0.0)
-    cropped_face2 = detector.detect_and_crop_largest_face_tasks(img2, expand=0.0)
+    names, db_embs = load_db(db_embs_path)  # names: list, db_embs: (N,D)
 
-    emb1 = embedder.get_embedding(cropped_face1, normalization="arcface")
-    emb2 = embedder.get_embedding(cropped_face2, normalization="arcface")
+    last_alert_time = 0.0
+    ALERT_COOLDOWN_SEC = 10  # prevent spam
 
-    detector.close()
+    try:
+        while True:
+            did_work = False
 
-    sim = cosine_sim_from_l2(emb1, emb2)
-    print("Cosine similarity:", sim)
-    print("Interpretation:", interpret_similarity(sim))
+            for slot in range(1, SLOTS + 1):
+                path = os.path.join(OUT_DIR, f"slot_{slot:02d}.jpg")
+                if not os.path.exists(path):
+                    continue
 
-    notifier.send(
-        title="Test notification",
-        message="Hello from Raspberry Pi!",
-        priority=4 # 4 = high priority
-    )
+                img = cv2.imread(path)
+                if img is None:
+                    time.sleep(0.01)
+                    continue
+
+                try:
+                    cropped_face = detector.detect_and_crop_largest_face_tasks(img, expand=EXPAND)
+                    emb_face = embedder.get_embedding(cropped_face, normalization="arcface")
+
+                    # Best match against DB
+                    scores = db_embs @ emb_face
+                    best_i = int(np.argmax(scores))
+                    best_sim = float(scores[best_i])
+                    best_name = names[best_i]
+
+                    if best_sim < THRESH:
+                        now = time.time()
+                        if now - last_alert_time >= ALERT_COOLDOWN_SEC:
+                            notifier.send(
+                                title="Unknown person detected!",
+                                message=f"Unknown at door. Best similarity: {best_sim:.4f}",
+                                priority=4
+                            )
+                            last_alert_time = now
+                        # print(f"UNKNOWN (best_sim={best_sim:.4f})")
+                    # else:
+                    #     print(f"KNOWN: {best_name} (sim={best_sim:.4f})")
+
+                except Exception as e:
+                    print("Error processing", path, ":", e)
+
+                # delete image after processing
+                try:
+                    os.remove(path)
+                except FileNotFoundError:
+                    pass
+
+                did_work = True
+
+            if not did_work:
+                time.sleep(0.05)
+
+    finally:
+        detector.close()
+
 
 if __name__ == "__main__":
     main()
-
-    

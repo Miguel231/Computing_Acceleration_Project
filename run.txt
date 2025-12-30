@@ -1,0 +1,2 @@
+first change things in embeddings.py,
+because for running on laptop and resberry pi, we need some changes.
