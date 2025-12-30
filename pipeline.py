@@ -14,9 +14,9 @@ def main():
     THRESH = 0.7 # similarity threshold
     EXPAND = 0.0
 
-    detector_model_path = "/data_projecte/detector.tflite"
-    embed_model_path = "/data_projecte/mobilefacenet_int8.tflite"
-    db_embs_path = "/data_projecte/storage.npz"
+    detector_model_path = "/home/miserasp/Desktop/projecte/Computing_Acceleration_Project/data_projecte/detector.tflite"
+    embed_model_path = "/home/miserasp/Desktop/projecte/Computing_Acceleration_Project/data_projecte/mobilefacenet_int8.tflite"
+    db_embs_path = "/home/miserasp/Desktop/projecte/Computing_Acceleration_Project/data_projecte/storage.npz"
 
     detector = FaceDetector(detector_model_path)
     embedder = Embeddings(embed_model_path)
