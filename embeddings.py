@@ -1,8 +1,8 @@
 
 # !! For laptop
-import tensorflow as tf
+# import tensorflow as tf
 # !! For resberry Pi
-# import tflite_runtime.interpreter as tflite
+import tflite_runtime.interpreter as tflite
 
 
 import cv2
@@ -22,9 +22,9 @@ class Embeddings:
     def _load_model(self):
         # TFLite embedder (MobileFaceNet)
         # !! For laptop
-        self.interpreter = tf.lite.Interpreter(model_path=self.model_path, num_threads=2)
+        # self.interpreter = tf.lite.Interpreter(model_path=self.model_path, num_threads=2)
         # !! For resberry Pi
-        # interpreter = tflite.Interpreter(model_path=embed_model_path, num_threads=2)
+        interpreter = tflite.Interpreter(model_path=self.model_path, num_threads=2)
         self.interpreter.allocate_tensors()
         self.input_details = self.interpreter.get_input_details()
         self.output_details = self.interpreter.get_output_details()
