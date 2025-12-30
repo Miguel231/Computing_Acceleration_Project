@@ -1,24 +1,35 @@
+# camera_ring_writer.py  (run with /usr/bin/python3)
 from picamera2 import Picamera2
-import time
-import os
+import time, os
 
-# Create output directory
-output_dir = "test_photos"
-os.makedirs(output_dir, exist_ok=True)
+OUT_DIR = "/home/miserasp/Desktop/projecte/shared/"
+os.makedirs(OUT_DIR, exist_ok=True)
+
+SLOTS = 10
+WARMUP = 2.0
 
 picam2 = Picamera2()
-
-# Configure camera for still capture
-config = picam2.create_still_configuration()
-picam2.configure(config)
-
+picam2.configure(picam2.create_still_configuration())
 picam2.start()
-time.sleep(2)  # warm-up time (important)
+time.sleep(WARMUP)
 
-for i in range(5):
-    filename = os.path.join(output_dir, f"image_{i+1}.jpg")
-    picam2.capture_file(filename)
-    print(f"Captured {filename}")
-    time.sleep(1)
+slot = 1
+try:
+    while True:
+        final_path = os.path.join(OUT_DIR, f"slot_{slot:02d}.jpg")
+        tmp_path   = final_path + ".tmp"
 
-picam2.stop()
+        # Don’t overwrite unread image
+        if os.path.exists(final_path):
+            time.sleep(0.05)
+            continue
+
+        picam2.capture_file(tmp_path)
+        os.replace(tmp_path, final_path)  # atomic publish
+        print("Wrote:", final_path)
+
+        slot = (slot % SLOTS) + 1
+        time.sleep(1)  # 1 photo per second (adjust as needed)
+
+finally:
+    picam2.stop()
