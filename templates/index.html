@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Security Camera Dashboard</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .header {
+            background-color: #2c3e50;
+            color: white;
+            padding: 20px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .dashboard {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 20px;
+        }
+        .video-section {
+            background: white;
+            padding: 15px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .controls-section {
+            background: white;
+            padding: 15px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .logs-section {
+            grid-column: 1 / -1;
+            background: white;
+            padding: 15px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            margin-top: 20px;
+        }
+        video {
+            width: 100%;
+            max-width: 640px;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+        }
+        .controls {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        input, button {
+            padding: 10px;
+            font-size: 14px;
+        }
+        button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        .danger {
+            background-color: #e74c3c;
+        }
+        .danger:hover {
+            background-color: #c0392b;
+        }
+        .success {
+            background-color: #2ecc71;
+        }
+        .log-entry {
+            padding: 8px;
+            border-bottom: 1px solid #eee;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .log-entry:nth-child(odd) {
+            background-color: #f9f9f9;
+        }
+        .status {
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 3px;
+        }
+        .status-success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status-error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .enrolled-list {
+            margin-top: 15px;
+        }
+        .enrolled-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 5px;
+            border-bottom: 1px solid #eee;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔒 Security Camera System</h1>
+            <p>ResNet100-ArcFace Face Recognition | Real-time Monitoring</p>
+        </div>
+        
+        <div class="dashboard">
+            <div class="video-section">
+                <h2>Live Camera Feed</h2>
+                <img id="videoFeed" src="{{ url_for('video_feed') }}" alt="Live Feed">
+                <div style="margin-top: 10px;">
+                    <button onclick="testCamera()">Test Camera</button>
+                    <button onclick="manualCheck()" class="success">Manual Face Check</button>
+                </div>
+            </div>
+            
+            <div class="controls-section">
+                <h2>Face Enrollment</h2>
+                <div class="controls">
+                    <input type="text" id="enrollName" placeholder="Enter name (e.g., John)" required>
+                    <button onclick="enrollFace()">Enroll Face from Camera</button>
+                </div>
+                
+                <div id="enrollStatus" class="status"></div>
+                
+                <div class="enrolled-list">
+                    <h3>Enrolled Faces ({{ enrolled_names|length }})</h3>
+                    <div id="enrolledNames">
+                        {% for name in enrolled_names %}
+                        <div class="enrolled-item">
+                            <span>{{ name }}</span>
+                            <button onclick="deleteEnrollment('{{ name }}')" class="danger">Delete</button>
+                        </div>
+                        {% else %}
+                        <p>No faces enrolled yet.</p>
+                        {% endfor %}
+                    </div>
+                </div>
+                
+                <div style="margin-top: 20px;">
+                    <h3>System Info</h3>
+                    <p>Recognition Threshold: {{ threshold }}</p>
+                    <button onclick="refreshLogs()">Refresh Logs</button>
+                    <button onclick="clearStatus()">Clear Messages</button>
+                </div>
+            </div>
+            
+            <div class="logs-section">
+                <h2>Security Logs (Last 15 Events)</h2>
+                <div id="logsContainer">
+                    {% for log in logs %}
+                    <div class="log-entry">{{ log.strip() }}</div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        function showStatus(message, isError = false) {
+            const statusDiv = document.getElementById('enrollStatus');
+            statusDiv.textContent = message;
+            statusDiv.className = 'status ' + (isError ? 'status-error' : 'status-success');
+            statusDiv.style.display = 'block';
+        }
+        
+        function clearStatus() {
+            document.getElementById('enrollStatus').style.display = 'none';
+        }
+        
+        async function enrollFace() {
+            const name = document.getElementById('enrollName').value.trim();
+            if (!name) {
+                showStatus('Please enter a name', true);
+                return;
+            }
+            
+            showStatus('Enrolling... Please look at the camera');
+            
+            const formData = new FormData();
+            formData.append('name', name);
+            
+            try {
+                const response = await fetch('/enroll', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    showStatus(result.success || 'Successfully enrolled!');
+                    document.getElementById('enrollName').value = '';
+                    refreshEnrolledList();
+                } else {
+                    showStatus(result.error || 'Enrollment failed', true);
+                }
+            } catch (error) {
+                showStatus('Network error: ' + error, true);
+            }
+        }
+        
+        async function manualCheck() {
+            showStatus('Checking for faces...');
+            
+            try {
+                const response = await fetch('/manual_check', {
+                    method: 'POST'
+                });
+                
+                const result = await response.json();
+                
+                if (result.status === 'recognized') {
+                    showStatus(`✅ Recognized: ${result.name}`);
+                } else if (result.status === 'unknown') {
+                    showStatus('❌ Unknown person detected', true);
+                } else if (result.status === 'no_face') {
+                    showStatus('No face detected in frame');
+                }
+                
+                refreshLogs();
+            } catch (error) {
+                showStatus('Check failed: ' + error, true);
+            }
+        }
+        
+        async function testCamera() {
+            try {
+                const response = await fetch('/test_camera');
+                if (response.ok) {
+                    showStatus('Camera is working');
+                } else {
+                    showStatus('Camera test failed', true);
+                }
+            } catch (error) {
+                showStatus('Camera test error: ' + error, true);
+            }
+        }
+        
+        async function deleteEnrollment(name) {
+            if (!confirm(`Delete enrollment for ${name}?`)) return;
+            
+            try {
+                const response = await fetch(`/delete_enrollment/${name}`, {
+                    method: 'DELETE'
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    showStatus(result.success || 'Deleted successfully');
+                    refreshEnrolledList();
+                    refreshLogs();
+                } else {
+                    showStatus(result.error || 'Delete failed', true);
+                }
+            } catch (error) {
+                showStatus('Delete error: ' + error, true);
+            }
+        }
+        
+        async function refreshEnrolledList() {
+            try {
+                // Refresh the page to get updated list
+                location.reload();
+            } catch (error) {
+                console.error('Refresh error:', error);
+            }
+        }
+        
+        async function refreshLogs() {
+            try {
+                const response = await fetch('/get_logs');
+                const result = await response.json();
+                
+                if (result.logs) {
+                    const logsContainer = document.getElementById('logsContainer');
+                    logsContainer.innerHTML = '';
+                    
+                    // Show last 15 logs
+                    const recentLogs = result.logs.slice(-15).reverse();
+                    recentLogs.forEach(log => {
+                        const logEntry = document.createElement('div');
+                        logEntry.className = 'log-entry';
+                        logEntry.textContent = log.trim();
+                        logsContainer.appendChild(logEntry);
+                    });
+                }
+            } catch (error) {
+                console.error('Log refresh error:', error);
+            }
+        }
+        
+        // Auto-refresh logs every 30 seconds
+        setInterval(refreshLogs, 30000);
+        
+        // Auto-refresh video feed to prevent freezing
+        setInterval(() => {
+            const videoFeed = document.getElementById('videoFeed');
+            videoFeed.src = videoFeed.src;
+        }, 60000); // Refresh every minute
+    </script>
+</body>
+</html>
