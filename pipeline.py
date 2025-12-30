@@ -60,9 +60,9 @@ def main():
                                 priority=4
                             )
                             last_alert_time = now
-                        # print(f"UNKNOWN (best_sim={best_sim:.4f})")
-                    # else:
-                    #     print(f"KNOWN: {best_name} (sim={best_sim:.4f})")
+                        print(f"UNKNOWN (best_sim={best_sim:.4f})")
+                    else:
+                        print(f"KNOWN: {best_name} (sim={best_sim:.4f})")
 
                 except Exception as e:
                     print("Error processing", path, ":", e)
