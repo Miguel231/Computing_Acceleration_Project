@@ -4,7 +4,7 @@ import cv2
 import numpy as np
 
 from face_detection import FaceDetector
-from embeddings import Embeddings
+from Computing_Acceleration_Project.model_part.embeddings import Embeddings
 
 
 from utils import load_db

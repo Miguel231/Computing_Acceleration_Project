@@ -3,7 +3,7 @@ import numpy as np
 import os, time
 
 from face_detection import FaceDetector
-from embeddings import Embeddings
+from Computing_Acceleration_Project.model_part.embeddings import Embeddings
 from comunication import NtfyNotifier
 from utils import load_db
 
