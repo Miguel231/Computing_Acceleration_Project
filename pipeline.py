@@ -11,8 +11,8 @@ from utils import load_db
 def main():
     OUT_DIR = "/home/miserasp/Desktop/projecte/shared/"
     SLOTS = 10
-    THRESH = 0.7 # similarity threshold
-    EXPAND = 0.0
+    THRESH = 0.8 # similarity threshold
+    EXPAND = 0.2
 
     detector_model_path = "/home/miserasp/Desktop/projecte/Computing_Acceleration_Project/data_projecte/detector.tflite"
     embed_model_path = "/home/miserasp/Desktop/projecte/Computing_Acceleration_Project/data_projecte/mobilefacenet_int8.tflite"
@@ -40,6 +40,8 @@ def main():
                 if img is None:
                     time.sleep(0.01)
                     continue
+                
+                start_t = time.perf_counter()
 
                 try:
                     cropped_face = detector.detect_and_crop_largest_face_tasks(img, expand=EXPAND)
@@ -67,6 +69,9 @@ def main():
                 except Exception as e:
                     print("Error processing", path, ":", e)
 
+                end_t = time.perf_counter()
+                elapsed_ms = (end_t - start_t) * 1000
+                print(f"Processed in {elapsed_ms:.2f} ms")
                 # delete image after processing
                 try:
                     os.remove(path)

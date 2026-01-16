@@ -41,7 +41,7 @@ def main():
                 continue
 
             try:
-                crop = detector.detect_and_crop_largest_face_tasks(img, expand=0.0)
+                crop = detector.detect_and_crop_largest_face_tasks(img, expand=0.2)
                 emb = embedder.get_embedding(crop, normalization="arcface")  # already L2-normalized
                 # the normalization is done inside get_embedding
                 new_embs.append(emb)
