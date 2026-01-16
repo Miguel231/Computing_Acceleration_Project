@@ -1,8 +1,0 @@
-first change things in embeddings.py,
-because for running on laptop and resberry pi, we need some changes.
-
-in one session i have to run camera.py with venv environment,
-and in another session i have to run pipeline.py with conda projecte environment.
-
-to add new person i have to use calculate_embedding_database.py file.
-
