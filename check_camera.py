@@ -15,7 +15,7 @@ picam2.configure(config)
 picam2.start()
 time.sleep(2)  # warm-up time (important)
 
-for i in range(5):
+for i in range(15):
     filename = os.path.join(output_dir, f"image_{i+1}.jpg")
     picam2.capture_file(filename)
     print(f"Captured {filename}")
