@@ -62,9 +62,9 @@ def save_db(npz_path: str, names, embs):
 def calculate_embeddings_database(label, image_paths):
     # print("  python3 enroll.py <face_detector.tflite> <embed_model.tflite> <storage.npz> <label> <img1> [img2 ... imgN]")
 
-    detector_model_path = ""
-    embed_model_path = ""
-    db_path = ""
+    detector_model_path = "/home/miserasp/Desktop/projecte/Computing_Acceleration_Project/data_projecte/detector.tflite"
+    embed_model_path = "/home/miserasp/Desktop/projecte/Computing_Acceleration_Project/data_projecte/mobilefacenet_int8.tflite"
+    db_path = "/home/miserasp/Desktop/projecte/Computing_Acceleration_Project/data_projecte/storage.npz"
     label = label
     image_paths = image_paths
 
@@ -119,7 +119,7 @@ class FamilyMember(BaseModel):
     id: str
     name: str
     image_path: str
-    added_date: datetime
+    # added_date: datetime
 
 class AccessEvent(BaseModel):
     id: str
@@ -197,7 +197,7 @@ async def add_family(name: str, image: UploadFile = File(...)):
         id=member_id,
         name=name,
         image_path=str(image_path),
-        added_date=datetime.now()
+        # added_date=datetime.now()
     )
 
     family_members.append(member)
@@ -213,6 +213,8 @@ async def add_family(name: str, image: UploadFile = File(...)):
         "action": "add",
         "member": member.dict()
     })
+    
+    calculate_embeddings_database(name, [str(image_path)])
 
     return member
 
