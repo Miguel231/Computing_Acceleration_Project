@@ -41,7 +41,7 @@ def main():
                     time.sleep(0.01)
                     continue
                 
-                start_t = time.perf_counter()
+                # start_t = time.perf_counter()
 
                 try:
                     cropped_face = detector.detect_and_crop_largest_face_tasks(img, expand=EXPAND)
@@ -69,9 +69,9 @@ def main():
                 except Exception as e:
                     print("Error processing", path, ":", e)
 
-                end_t = time.perf_counter()
-                elapsed_ms = (end_t - start_t) * 1000
-                print(f"Processed in {elapsed_ms:.2f} ms")
+                # end_t = time.perf_counter()
+                # elapsed_ms = (end_t - start_t) * 1000
+                # print(f"Processed in {elapsed_ms:.2f} ms")
                 # delete image after processing
                 try:
                     os.remove(path)
