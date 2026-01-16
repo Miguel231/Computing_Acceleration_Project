@@ -22,77 +22,25 @@ from embeddings import Embeddings
 
 from utils import load_db
 
+# ==================== APP ====================
 app = FastAPI(title="Smart EdgeAI Security API")
 
-
-# Calculate embedding database
-def save_db(npz_path: str, names, embs):
-    np.savez(npz_path, names=np.array(names), embs=embs.astype(np.float32))
-
-
-def calculate_embeddings_database(label, image_paths):
-    # print("  python3 enroll.py <face_detector.tflite> <embed_model.tflite> <storage.npz> <label> <img1> [img2 ... imgN]")
-
-    detector_model_path = ""
-    embed_model_path = ""
-    db_path = ""
-    label = label
-    image_paths = image_paths
-
-    detector = FaceDetector(detector_model_path)
-    embedder = Embeddings(embed_model_path)
-
-    # Load existing DB (if any)
-    names, embs = load_db(db_path)
-    new_embs = []
-
-    try:
-        for p in image_paths:
-            img = cv2.imread(p)
-            if img is None:
-                print(f"[SKIP] Could not read image: {p}")
-                continue
-
-            try:
-                crop = detector.detect_and_crop_largest_face_tasks(img, expand=0.2)
-                emb = embedder.get_embedding(crop, normalization="arcface")  # already L2-normalized
-                # the normalization is done inside get_embedding
-                new_embs.append(emb)
-                print(f"[OK] Added embedding for '{label}' from: {p}")
-            except Exception as e:
-                print(f"[SKIP] {p} -> {e}")
-
-        if not new_embs:
-            print("No embeddings were added. Nothing to save.")
-            return
-
-        new_embs = np.vstack(new_embs).astype(np.float32)  # (K,D)
-
-        if embs is None:
-            # first time creating DB
-            embs = new_embs
-            names = [label] * new_embs.shape[0]
-        else:
-            # append to existing
-            embs = np.vstack([embs, new_embs]).astype(np.float32)
-            names.extend([label] * new_embs.shape[0])
-
-        save_db(db_path, names, embs)
-        print(f"Saved {len(new_embs)} new embeddings to: {db_path}")
-        print(f"DB now contains {len(names)} embeddings total.")
-
-    finally:
-        detector.close()
-
-
-# ==================== CORS ====================
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # En producción, poner dominios reales
+    allow_origins=["*"],  # OK para red local
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ==================== PATHS ====================
+BASE_DIR = Path(__file__).parent
+DATA_DIR = BASE_DIR / "data"
+IMAGES_DIR = DATA_DIR / "images" / "family"
+FAMILY_JSON = DATA_DIR / "family.json"
+
+IMAGES_DIR.mkdir(parents=True, exist_ok=True)
+DATA_DIR.mkdir(exist_ok=True)
 
 # ==================== MODELOS ====================
 class FamilyMember(BaseModel):
@@ -111,168 +59,157 @@ class AccessEvent(BaseModel):
 
 class SystemConfig(BaseModel):
     threshold: float = 0.40
-    webhook_url: Optional[str] = None
     enable_alerts: bool = True
-    save_intruder_images: bool = True
 
 class DetectionResult(BaseModel):
     timestamp: datetime
     detected: bool
-    person_name: Optional[str] = None
+    person_name: Optional[str]
     is_family: bool
     distance: float
-    frame: str
+    frame: Optional[str] = None
 
-# ==================== RUTAS JSON ====================
-LOCAL_JSON_PATH = Path("family_local.json")
-RASPBERRY_JSON_PATH = Path("/path/to/raspberry/family_raspberry.json")  # Cambiar según tu setup
-
-def load_family_json(path: Path):
-    if path.exists():
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except:
-            return []
-    return []
-
-def save_family_json(path: Path, data: list):
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, default=str, indent=2)
-
-def load_combined_family():
-    local = load_family_json(LOCAL_JSON_PATH)
-    raspberry = load_family_json(RASPBERRY_JSON_PATH)
-    combined = {m["id"]: m for m in local}
-    for m in raspberry:
-        combined[m["id"]] = m
-    return list(combined.values())
-
-# ==================== ALMACENAMIENTO EN MEMORIA ====================
-family_members: List[FamilyMember] = [FamilyMember(**m) for m in load_combined_family()]
+# ==================== STORAGE ====================
+family_members: List[FamilyMember] = []
 access_events: List[AccessEvent] = []
 system_config = SystemConfig()
-connected_cameras: dict = {}
-connected_clients: set = set()
+connected_cameras = {}
+connected_clients = set()
 
-# ==================== AUXILIARES ====================
-async def notify_cameras(event_type: str, payload: dict):
-    for ws in connected_cameras.values():
-        try:
-            await ws.send_json({"type": event_type, "payload": payload})
-        except:
-            pass
+# ==================== JSON HELPERS ====================
+def load_family():
+    global family_members
+    if FAMILY_JSON.exists():
+        with open(FAMILY_JSON, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            family_members = [FamilyMember(**m) for m in data]
+    else:
+        family_members = []
 
+def save_family():
+    with open(FAMILY_JSON, "w", encoding="utf-8") as f:
+        json.dump([m.dict() for m in family_members], f, indent=2, default=str)
+
+# ==================== WEBSOCKET HELPERS ====================
 async def broadcast_to_clients(message: dict):
-    disconnected = set()
+    dead = set()
     for ws in connected_clients:
         try:
             await ws.send_json(message)
         except:
-            disconnected.add(ws)
-    connected_clients.difference_update(disconnected)
+            dead.add(ws)
+    connected_clients.difference_update(dead)
 
-async def sync_family_with_json():
-    """Revisar cada X segundos la Raspberry y sincronizar"""
-    while True:
-        combined = load_combined_family()
-        global family_members
-        # Detectar cambios
-        ids_in_memory = {m.id for m in family_members}
-        ids_combined = {m["id"] for m in combined}
-        
-        if ids_in_memory != ids_combined:
-            # Actualizar memoria
-            family_members = [FamilyMember(**m) for m in combined]
-            # Guardar JSON local
-            save_family_json(LOCAL_JSON_PATH, [m.dict() for m in family_members])
-            # Notificar a todos los clientes
-            await broadcast_to_clients({
-                "type": "update_family",
-                "family_members": [m.dict() for m in family_members]
-            })
-        
-        await asyncio.sleep(5)  # cada 5 segundos
+async def notify_cameras(message: dict):
+    for ws in connected_cameras.values():
+        try:
+            await ws.send_json(message)
+        except:
+            pass
 
-# ==================== ENDPOINTS ====================
+# ==================== FAMILY API ====================
 @app.get("/api/family", response_model=List[FamilyMember])
-async def get_family_members():
+async def get_family():
     return family_members
 
 @app.post("/api/family", response_model=FamilyMember)
-async def add_family_member(name: str, image: UploadFile = File(...)):
+async def add_family(name: str, image: UploadFile = File(...)):
     member_id = str(uuid.uuid4())
-    image_data = await image.read()
-    image_base64 = base64.b64encode(image_data).decode("utf-8")
+    suffix = Path(image.filename).suffix or ".jpg"
+    image_path = IMAGES_DIR / f"{member_id}{suffix}"
 
-    new_member = FamilyMember(
+    with open(image_path, "wb") as buffer:
+        shutil.copyfileobj(image.file, buffer)
+
+    member = FamilyMember(
         id=member_id,
         name=name,
-        image_path=f"data:image/jpeg;base64,{image_base64}",
+        image_path=str(image_path),
         added_date=datetime.now()
     )
 
-    family_members.append(new_member)
-    # Guardar cambios en JSON local y opcional Raspberry
-    save_family_json(LOCAL_JSON_PATH, [m.dict() for m in family_members])
-    # save_family_json(RASPBERRY_JSON_PATH, [m.dict() for m in family_members])  # si tienes acceso
+    family_members.append(member)
+    save_family()
 
-    # Notificar a clientes y cámaras
-    # await broadcast_to_clients({"type": "update_family", "family_members": [m.dict() for m in family_members]})
-    # await notify_cameras("update_family", {"action": "add", "member": new_member.dict()})
+    await broadcast_to_clients({
+        "type": "update_family",
+        "family_members": [m.dict() for m in family_members]
+    })
 
-    calculate_embeddings_database(name, [image.filename])  # Asumiendo que la imagen se guarda en un path accesible
+    await notify_cameras({
+        "type": "update_family",
+        "action": "add",
+        "member": member.dict()
+    })
 
-    return new_member
+    return member
 
 @app.delete("/api/family/{member_id}")
-async def delete_family_member(member_id: str):
+async def delete_family(member_id: str):
     global family_members
-    family_members = [m for m in family_members if m.id != member_id]
-    save_family_json(LOCAL_JSON_PATH, [m.dict() for m in family_members])
-    await broadcast_to_clients({"type": "update_family", "family_members": [m.dict() for m in family_members]})
-    await notify_cameras("update_family", {"action": "delete", "member_id": member_id})
-    return {"message": "Member deleted successfully"}
+    member = next((m for m in family_members if m.id == member_id), None)
+    if not member:
+        raise HTTPException(404, "Member not found")
 
+    if Path(member.image_path).exists():
+        Path(member.image_path).unlink()
+
+    family_members = [m for m in family_members if m.id != member_id]
+    save_family()
+
+    await broadcast_to_clients({
+        "type": "update_family",
+        "family_members": [m.dict() for m in family_members]
+    })
+
+    await notify_cameras({
+        "type": "update_family",
+        "action": "delete",
+        "member_id": member_id
+    })
+
+    return {"ok": True}
+
+# ==================== EVENTS ====================
 @app.get("/api/events", response_model=List[AccessEvent])
-async def get_access_events(limit: int = 100):
+async def get_events(limit: int = 100):
     return access_events[-limit:]
 
 @app.get("/api/events/stats")
-async def get_event_statistics():
+async def get_stats():
     total = len(access_events)
-    family_access = sum(1 for e in access_events if e.is_family)
-    intruders = total - family_access
-    daily_stats = defaultdict(int)
-    for e in access_events[-200:]:
-        day = e.timestamp.date().isoformat()
-        daily_stats[day] += 1
+    family = sum(e.is_family for e in access_events)
+    daily = defaultdict(int)
+    for e in access_events:
+        daily[e.timestamp.date().isoformat()] += 1
+
     return {
-        "total_events": total,
-        "family_access": family_access,
-        "intruder_alerts": intruders,
-        "daily_stats": dict(daily_stats)
+        "total": total,
+        "family": family,
+        "intruders": total - family,
+        "daily": dict(daily)
     }
 
+# ==================== CONFIG ====================
 @app.get("/api/config", response_model=SystemConfig)
 async def get_config():
     return system_config
 
 @app.put("/api/config", response_model=SystemConfig)
-async def update_config(config: SystemConfig):
+async def update_config(cfg: SystemConfig):
     global system_config
-    system_config = config
-    await notify_cameras("config_update", config.dict())
+    system_config = cfg
+    await notify_cameras({"type": "config_update", "config": cfg.dict()})
     return system_config
 
 # ==================== WEBSOCKETS ====================
 @app.websocket("/ws/camera/{camera_id}")
-async def camera_websocket(websocket: WebSocket, camera_id: str):
-    await websocket.accept()
-    connected_cameras[camera_id] = websocket
+async def camera_ws(ws: WebSocket, camera_id: str):
+    await ws.accept()
+    connected_cameras[camera_id] = ws
     try:
         while True:
-            data = await websocket.receive_json()
+            data = await ws.receive_json()
             if data["type"] == "detection":
                 det = DetectionResult(**data["payload"])
                 event = AccessEvent(
@@ -285,44 +222,30 @@ async def camera_websocket(websocket: WebSocket, camera_id: str):
                 )
                 access_events.append(event)
                 await broadcast_to_clients({"type": "new_event", "event": event.dict()})
-            elif data["type"] == "frame":
-                await broadcast_to_clients({"type": "video_frame", "camera_id": camera_id, "frame": data["frame"]})
     except WebSocketDisconnect:
-        del connected_cameras[camera_id]
+        connected_cameras.pop(camera_id, None)
 
 @app.websocket("/ws/client")
-async def client_websocket(websocket: WebSocket):
-    await websocket.accept()
-    connected_clients.add(websocket)
+async def client_ws(ws: WebSocket):
+    await ws.accept()
+    connected_clients.add(ws)
     try:
-        await websocket.send_json({
+        await ws.send_json({
             "type": "init",
-            "config": system_config.dict(),
             "family_members": [m.dict() for m in family_members],
-            "connected_cameras": list(connected_cameras.keys())
+            "config": system_config.dict()
         })
         while True:
-            await websocket.receive_text()
+            await ws.receive_text()
     except WebSocketDisconnect:
-        connected_clients.remove(websocket)
+        connected_clients.remove(ws)
 
-# ==================== HEALTH ====================
-@app.get("/health")
-async def health_check():
-    return {
-        "status": "healthy",
-        "cameras_connected": len(connected_cameras),
-        "clients_connected": len(connected_clients),
-        "family_members": len(family_members),
-        "total_events": len(access_events)
-    }
-
-# ==================== INICIAR BACKEND ====================
+# ==================== STARTUP ====================
 @app.on_event("startup")
-async def startup_event():
-    # Iniciar tarea de sincronización de familiares
-    asyncio.create_task(sync_family_with_json())
+async def startup():
+    load_family()
 
+# ==================== RUN ====================
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run("main:app", host="0.0.0.0", port=8000)
