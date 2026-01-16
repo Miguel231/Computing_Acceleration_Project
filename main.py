@@ -10,7 +10,80 @@ import asyncio
 from collections import defaultdict
 from pathlib import Path
 
+
+from sys import argv, exit
+import os
+import cv2
+import numpy as np
+
+from face_detection import FaceDetector
+from embeddings import Embeddings
+
+
+from utils import load_db
+
 app = FastAPI(title="Smart EdgeAI Security API")
+
+
+# Calculate embedding database
+def save_db(npz_path: str, names, embs):
+    np.savez(npz_path, names=np.array(names), embs=embs.astype(np.float32))
+
+
+def calculate_embeddings_database(label, image_paths):
+    # print("  python3 enroll.py <face_detector.tflite> <embed_model.tflite> <storage.npz> <label> <img1> [img2 ... imgN]")
+
+    detector_model_path = ""
+    embed_model_path = ""
+    db_path = ""
+    label = label
+    image_paths = image_paths
+
+    detector = FaceDetector(detector_model_path)
+    embedder = Embeddings(embed_model_path)
+
+    # Load existing DB (if any)
+    names, embs = load_db(db_path)
+    new_embs = []
+
+    try:
+        for p in image_paths:
+            img = cv2.imread(p)
+            if img is None:
+                print(f"[SKIP] Could not read image: {p}")
+                continue
+
+            try:
+                crop = detector.detect_and_crop_largest_face_tasks(img, expand=0.2)
+                emb = embedder.get_embedding(crop, normalization="arcface")  # already L2-normalized
+                # the normalization is done inside get_embedding
+                new_embs.append(emb)
+                print(f"[OK] Added embedding for '{label}' from: {p}")
+            except Exception as e:
+                print(f"[SKIP] {p} -> {e}")
+
+        if not new_embs:
+            print("No embeddings were added. Nothing to save.")
+            return
+
+        new_embs = np.vstack(new_embs).astype(np.float32)  # (K,D)
+
+        if embs is None:
+            # first time creating DB
+            embs = new_embs
+            names = [label] * new_embs.shape[0]
+        else:
+            # append to existing
+            embs = np.vstack([embs, new_embs]).astype(np.float32)
+            names.extend([label] * new_embs.shape[0])
+
+        save_db(db_path, names, embs)
+        print(f"Saved {len(new_embs)} new embeddings to: {db_path}")
+        print(f"DB now contains {len(names)} embeddings total.")
+
+    finally:
+        detector.close()
+
 
 # ==================== CORS ====================
 app.add_middleware(
@@ -145,8 +218,10 @@ async def add_family_member(name: str, image: UploadFile = File(...)):
     # save_family_json(RASPBERRY_JSON_PATH, [m.dict() for m in family_members])  # si tienes acceso
 
     # Notificar a clientes y cámaras
-    await broadcast_to_clients({"type": "update_family", "family_members": [m.dict() for m in family_members]})
-    await notify_cameras("update_family", {"action": "add", "member": new_member.dict()})
+    # await broadcast_to_clients({"type": "update_family", "family_members": [m.dict() for m in family_members]})
+    # await notify_cameras("update_family", {"action": "add", "member": new_member.dict()})
+
+    calculate_embeddings_database(name, [image.filename])  # Asumiendo que la imagen se guarda en un path accesible
 
     return new_member
 
