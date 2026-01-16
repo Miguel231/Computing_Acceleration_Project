@@ -1,8 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Camera, Users, Activity, Settings, Shield, AlertTriangle, CheckCircle, Plus, Trash2 } from 'lucide-react';
 
-const API_URL = 'http://localhost:8000';
-const WS_URL = 'ws://localhost:8000/ws/client';
+//const API_URL = 'http://localhost:8000';
+//const WS_URL = 'ws://localhost:8000/ws/client';
+
+const API_URL = 'http://172.20.10.3:8000';
+const WS_URL = 'ws://172.20.10.3:8000/ws/client';
+
 
 export default function SecurityDashboard() {
   const [familyMembers, setFamilyMembers] = useState([]);
@@ -150,14 +154,14 @@ export default function SecurityDashboard() {
 
         <div className="bg-slate-800/50 backdrop-blur-lg rounded-xl border border-slate-700 overflow-hidden">
           <div className="flex border-b border-slate-700">
-            <TabButton icon={Camera} label="Live" active={activeTab === 'live'} onClick={() => setActiveTab('live')} />
+            {/* <TabButton icon={Camera} label="Live" active={activeTab === 'live'} onClick={() => setActiveTab('live')} /> */}
             <TabButton icon={Users} label="Family" active={activeTab === 'family'} onClick={() => setActiveTab('family')} />
             <TabButton icon={Activity} label="Events" active={activeTab === 'events'} onClick={() => setActiveTab('events')} />
             <TabButton icon={Settings} label="Settings" active={activeTab === 'config'} onClick={() => setActiveTab('config')} />
           </div>
 
           <div className="p-6">
-            {activeTab === 'live' && <LiveView frame={currentFrame} />}
+            {/*{activeTab === 'live' && <LiveView frame={currentFrame} />}*/}
             {activeTab === 'family' && <FamilyView members={familyMembers} onAdd={addFamilyMember} onDelete={deleteFamilyMember} />}
             {activeTab === 'events' && <EventsView events={events} />}
             {activeTab === 'config' && <ConfigView config={config} onUpdate={updateConfig} />}
@@ -199,24 +203,90 @@ function TabButton({ icon: Icon, label, active, onClick }) {
     </button>
   );
 }
+/*
+function LiveView() {
+  const videoRef = useRef(null);
+  const canvasRef = useRef(null);
+  const [capturedImage, setCapturedImage] = useState(null);
+  const [error, setError] = useState(null);
 
-function LiveView({ frame }) {
+  useEffect(() => {
+    const startCamera = async () => {
+      try {
+        // Pedir acceso a la cámara
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          await videoRef.current.play(); // asegurar que el video se reproduzca
+        }
+      } catch (err) {
+        console.error('Error al acceder a la cámara:', err);
+        setError('No se pudo acceder a la cámara. Revisa permisos y HTTPS.');
+      }
+    };
+
+    startCamera();
+
+    return () => {
+      // Detener cámara al desmontar
+      if (videoRef.current && videoRef.current.srcObject) {
+        videoRef.current.srcObject.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, []);
+
+  const takePhoto = () => {
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    if (!video || !canvas) return;
+
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    const dataUrl = canvas.toDataURL('image/jpeg');
+    setCapturedImage(dataUrl);
+  };
+
   return (
     <div className="space-y-4">
       <h2 className="text-xl font-semibold text-white">Live View</h2>
-      <div className="bg-slate-900 rounded-lg overflow-hidden aspect-video flex items-center justify-center">
-        {frame ? (
-          <img src={`data:image/jpeg;base64,${frame}`} alt="Live feed" className="w-full h-full object-contain" />
-        ) : (
-          <div className="text-center text-slate-500">
-            <Camera className="w-16 h-16 mx-auto mb-3 opacity-30" />
-            <p>Waiting for video stream...</p>
-          </div>
+
+      <div className="bg-slate-900 rounded-lg overflow-hidden aspect-video flex flex-col items-center justify-center">
+        {error && <p className="text-red-500">{error}</p>}
+        {!capturedImage && !error && (
+          <video ref={videoRef} autoPlay muted className="w-full h-full object-contain rounded-lg" />
+        )}
+        {capturedImage && (
+          <img src={capturedImage} alt="Captured" className="w-full h-full object-contain rounded-lg" />
         )}
       </div>
+
+      <div className="flex gap-2">
+        {!capturedImage && !error && (
+          <button
+            onClick={takePhoto}
+            className="px-4 py-2 bg-cyan-500 hover:bg-cyan-600 text-white rounded-lg"
+          >
+            Take Photo
+          </button>
+        )}
+        {capturedImage && (
+          <button
+            onClick={() => setCapturedImage(null)}
+            className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg"
+          >
+            Retake
+          </button>
+        )}
+      </div>
+
+      <canvas ref={canvasRef} style={{ display: 'none' }} />
     </div>
   );
 }
+*/
 
 function FamilyView({ members, onAdd, onDelete }) {
   const [showAddForm, setShowAddForm] = useState(false);
