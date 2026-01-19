@@ -4,8 +4,8 @@ import { Camera, Users, Activity, Settings, Shield, AlertTriangle, CheckCircle, 
 //const API_URL = 'http://localhost:8000';
 //const WS_URL = 'ws://localhost:8000/ws/client';
 
-const API_URL = 'http://172.20.10.3:8000';
-const WS_URL = 'ws://172.20.10.3:8000/ws/client';
+const API_URL = 'http://172.20.10.2:8000';
+const WS_URL = 'ws://172.20.10.2:8000/ws/client';
 
 
 export default function SecurityDashboard() {

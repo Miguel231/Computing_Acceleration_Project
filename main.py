@@ -63,7 +63,7 @@ def calculate_embeddings_database(label, image_paths):
     # print("  python3 enroll.py <face_detector.tflite> <embed_model.tflite> <storage.npz> <label> <img1> [img2 ... imgN]")
 
     detector_model_path = "/home/miserasp/Desktop/projecte/Computing_Acceleration_Project/data_projecte/detector.tflite"
-    embed_model_path = "/home/miserasp/Desktop/projecte/Computing_Acceleration_Project/data_projecte/mobilefacenet_int8.tflite"
+    embed_model_path = "/home/miserasp/Desktop/projecte/Computing_Acceleration_Project/data_projecte/mobilefacenet_float32.tflite"
     db_path = "/home/miserasp/Desktop/projecte/Computing_Acceleration_Project/data_projecte/storage.npz"
     label = label
     image_paths = image_paths
@@ -83,7 +83,7 @@ def calculate_embeddings_database(label, image_paths):
                 continue
 
             try:
-                crop = detector.detect_and_crop_largest_face_tasks(img, expand=0.2)
+                crop = detector.detect_and_crop_largest_face_tasks(img, expand=0.0)
                 emb = embedder.get_embedding(crop, normalization="arcface")  # already L2-normalized
                 # the normalization is done inside get_embedding
                 new_embs.append(emb)

@@ -10,7 +10,7 @@ INTERVAL_SEC = 1
 CAPTURE_DURATION = 10
 WARMUP = 2.0
 
-MOUSE_DEV = "/dev/input/by-id/usb-PixArt_Dell_MS116_USB_Optical_Mouse-event-mouse"
+MOUSE_DEV = "/dev/input/by-id/usb-Compx_2.4G_Receiver-if01-event-mouse"
 
 picam2 = Picamera2()
 picam2.configure(picam2.create_still_configuration())

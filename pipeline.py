@@ -11,8 +11,8 @@ from utils import load_db
 def main():
     OUT_DIR = "/home/miserasp/Desktop/projecte/shared/"
     SLOTS = 10
-    THRESH = 0.8 # similarity threshold
-    EXPAND = 0.2
+    THRESH = 0.72 # similarity threshold
+    EXPAND = 0.0 # 0.2
 
     detector_model_path = "/home/miserasp/Desktop/projecte/Computing_Acceleration_Project/data_projecte/detector.tflite"
     embed_model_path = "/home/miserasp/Desktop/projecte/Computing_Acceleration_Project/data_projecte/mobilefacenet_int8.tflite"
@@ -22,7 +22,10 @@ def main():
     embedder = Embeddings(embed_model_path)
     notifier = NtfyNotifier(topic="home-door-83f9a2")
 
-    names, db_embs = load_db(db_embs_path)  # names: list, db_embs: (N,D)
+    CROPPED_DIR = "/home/miserasp/Desktop/projecte/cropped_faces/"
+    os.makedirs(CROPPED_DIR, exist_ok=True)
+
+    # names, db_embs = load_db(db_embs_path)  # names: list, db_embs: (N,D)
 
     last_alert_time = 0.0
     ALERT_COOLDOWN_SEC = 10  # prevent spam
@@ -32,6 +35,7 @@ def main():
             did_work = False
 
             for slot in range(1, SLOTS + 1):
+                names, db_embs = load_db(db_embs_path)  # names: list, db_embs: (N,D)
                 path = os.path.join(OUT_DIR, f"slot_{slot:02d}.jpg")
                 if not os.path.exists(path):
                     continue
@@ -45,6 +49,15 @@ def main():
 
                 try:
                     cropped_face = detector.detect_and_crop_largest_face_tasks(img, expand=EXPAND)
+                    # Save cropped face
+                    ts = int(time.time() * 1000)  # ms timestamp 
+                    crop_path = os.path.join(
+                         CROPPED_DIR,
+                         f"crop_slot{slot:02d}_{ts}.jpg"
+                    )
+                    cv2.imwrite(crop_path, cropped_face) 
+
+
                     emb_face = embedder.get_embedding(cropped_face, normalization="arcface")
 
                     # Best match against DB
